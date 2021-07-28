@@ -66,7 +66,7 @@ contract FlightSuretyData {
     * @return A bool that is the current operating status
     */      
     function isOperational() 
-                            public 
+                            external 
                             view 
                             returns(bool) 
     {
