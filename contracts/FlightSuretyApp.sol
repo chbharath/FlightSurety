@@ -27,7 +27,7 @@ contract FlightSuretyApp {
 
     address private contractOwner;          // Account used to deploy contract
     
-    FlightSuretyData private flightData;
+    FlightSuretyData private flightSuretyData;
 
     struct Flight {
         bool isRegistered;
@@ -53,7 +53,7 @@ contract FlightSuretyApp {
     modifier requireIsOperational() 
     {
          // Modify to call data contract's status
-        require(flightData.isOperational() == true, "Contract is currently not operational");  
+        require(flightSuretyData.isOperational() == true, "Contract is currently not operational");  
         _;  // All modifiers require an "_" which indicates where the function body will be added
     }
 
@@ -76,10 +76,12 @@ contract FlightSuretyApp {
     */
     constructor
                                 (
+                                    address payable dataContract
                                 ) 
                                 public 
     {
         contractOwner = msg.sender;
+        flightSuretyData = FlightSuretyData(dataContract);
     }
 
     /********************************************************************************************/
@@ -91,7 +93,7 @@ contract FlightSuretyApp {
                             view 
                             returns(bool) 
     {
-        return flightData.isOperational();  // Modify to call data contract's status
+        return flightSuretyData.isOperational();  // Modify to call data contract's status
     }
 
     /********************************************************************************************/
@@ -103,15 +105,15 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline
-                            (   
-                            )
-                            external
-                            pure
-                            returns(bool success, uint256 votes)
-    {
-        return (success, 0);
-    }
+    //function registerAirline
+    //                        (   
+    //                        )
+    //                        external
+    //                        pure
+    //                        returns(bool success, uint256 votes)
+    //{
+    //    return (success, 0);
+    //}
 
 
    /**

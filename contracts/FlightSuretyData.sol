@@ -1,6 +1,7 @@
 pragma solidity >=0.4.25;
 
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "./FlightSuretyApp.sol";
 
 contract FlightSuretyData {
     using SafeMath for uint256;
@@ -11,11 +12,45 @@ contract FlightSuretyData {
 
     address private contractOwner;                                      // Account used to deploy contract
     bool private operational = true;                                    // Blocks all state changes throughout the contract if false
+    
+    uint256 private authorizedAirlineCount = 0;
+    uint256 private changeOperatingStatusVote = 0;
+    uint256 private insurancebalance = 0;
+    address private insuranceAccount;
+    uint256 private totalAmount = 0;
+    struct Flight {
+        uint8 statusCode;
+        uint256 updatedTimestamp;
+        Airline airline;
+    }
+    struct Airline {
+        string name;
+        address account;
+        bool isRegistered;
+        bool isAuthorized;
+        bool operationalVote;
+    }
+    struct Insuree {
+        address payable account;
+        uint256 insuranceAmount;
+        uint256 payoutBalance;
+    }
+
+    mapping(address => uint256) private funding;
+    mapping(bytes32 => Flight) private flights;
+    mapping(address => Airline) airlines;
+    mapping(address => Insuree) private insurees;
+    mapping(address => uint256) private creditBalance;
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
-
+    
+    event RegisteredAirline(address airline);
+    event AuthorizedAirline(address airline);
+    event BoughtInsurance(address caller, bytes32 key, uint256 amount);
+    event CreditInsuree(address airline, address insuree, uint256 amount);
+    event PayInsuree(address airline, address insuree, uint256 amount);
 
     /**
     * @dev Constructor
@@ -27,6 +62,16 @@ contract FlightSuretyData {
                                 public 
     {
         contractOwner = msg.sender;
+        airlines[contractOwner] = Airline({
+            name: "Bharath",
+            account: contractOwner,
+            isRegistered: true,
+            isAuthorized: true,
+            operationalVote: true
+        });
+
+        authorizedAirlineCount = authorizedAirlineCount.add(1);
+        emit RegisteredAirline(contractOwner);
     }
 
     /********************************************************************************************/
@@ -46,7 +91,12 @@ contract FlightSuretyData {
         require(operational, "Contract is currently not operational");
         _;  // All modifiers require an "_" which indicates where the function body will be added
     }
-
+    
+    modifier requireIsAuthorized()
+    {
+        require(airlines[msg.sender].isAuthorized, "Airline should be authorized");
+        _;
+    }
     /**
     * @dev Modifier that requires the "ContractOwner" account to be the function caller
     */
@@ -86,7 +136,19 @@ contract FlightSuretyData {
                             external
                             requireContractOwner 
     {
-        operational = mode;
+        address caller = msg.sender;
+
+        if(authorizedAirlineCount < 4){
+            operational = mode;
+        } else {
+            changeOperatingStatusVote = changeOperatingStatusVote.add(1);
+            airlines[caller].operationalVote = mode;
+            if(changeOperatingStatusVote >= (authorizedAirlineCount.div(2))){
+                operational = mode;
+                changeOperatingStatusVote = authorizedAirlineCount - changeOperatingStatusVote;
+            }
+        }
+        
     }
 
     /********************************************************************************************/
@@ -99,11 +161,26 @@ contract FlightSuretyData {
     *
     */   
     function registerAirline
-                            (   
+                            (   string calldata name,
+                                address airline
                             )
                             external
-                            pure
+                            requireIsOperational
     {
+         require(!airlines[airline].isRegistered,"airline is already registered");
+         if(authorizedAirlineCount <=4){
+             airlines[airline] = Airline({
+                 name: name,
+                 account: airline,
+                 isRegistered: true,
+                 isAuthorized: false,
+                 operationalVote: true
+             });
+            authorizedAirlineCount = authorizedAirlineCount.add(1);
+         }
+
+         emit RegisteredAirline(airline);
+          
     }
 
 
@@ -112,12 +189,26 @@ contract FlightSuretyData {
     *
     */   
     function buy
-                            (                             
+                            (      
+                                address payable airline,
+                                address insuree,
+                                string calldata flight,
+                                uint256 timeStamp,
+                                uint256 amount                       
                             )
+                            requireIsOperational
                             external
                             payable
     {
+        require(insurees[insuree].account == insuree, "Provide insuree account address");
+        require(msg.sender == insuree, "only insuree can call this function");
+        require(amount == msg.value, "amount should be same as value sent");
+        bytes32 key = getFlightKey(airline, flight, timeStamp);
+        airline.transfer(amount);
+        insurees[insuree].insuranceAmount += amount;
+        insurancebalance += amount;
 
+        emit BoughtInsurance(msg.sender, key, amount);
     }
 
     /**
@@ -125,10 +216,17 @@ contract FlightSuretyData {
     */
     function creditInsurees
                                 (
+                                    address airline,
+                                    address insuree,
+                                    uint256 creditAmount
                                 )
                                 external
-                                pure
+                                requireIsOperational
     {
+        require(insurees[insuree].insuranceAmount >= creditAmount);
+
+        insurees[insuree].payoutBalance = creditAmount;
+        emit CreditInsuree(airline,insuree, creditAmount);
     }
     
 
@@ -138,10 +236,16 @@ contract FlightSuretyData {
     */
     function pay
                             (
+                                address payable airline,
+                                address payable insuree,
+                                uint256 payoutAmount
                             )
                             external
-                            pure
+                            requireIsOperational
     {
+        require(msg.sender == airline);
+        insurees[insuree].account.transfer(payoutAmount);
+        emit PayInsuree(airline, insuree, payoutAmount);
     }
 
    /**
@@ -151,10 +255,23 @@ contract FlightSuretyData {
     */   
     function fund
                             (   
+                                address payable airline
                             )
                             public
                             payable
+                            requireIsOperational
     {
+        require(msg.value >= 10 ether, "Minimum 10 ether should be funded");
+        require(airlines[airline].isRegistered, "Account must be registered before funding");
+
+        totalAmount = totalAmount.add(msg.value);
+        airline.transfer(msg.value);
+
+        if(!airlines[airline].isAuthorized){
+            airlines[airline].isAuthorized = true;
+            authorizedAirlineCount = authorizedAirlineCount.add(1);
+            emit AuthorizedAirline(airline);
+        }
     }
 
     function getFlightKey
@@ -178,7 +295,7 @@ contract FlightSuretyData {
                             external 
                             payable 
     {
-        fund();
+        fund(msg.sender);
     }
 
 
