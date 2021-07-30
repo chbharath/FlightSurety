@@ -18,6 +18,7 @@ contract FlightSuretyData {
     uint256 private insurancebalance = 0;
     address private insuranceAccount;
     uint256 private totalAmount = 0;
+    uint256 private votes = 0;
     struct Flight {
         uint8 statusCode;
         uint256 updatedTimestamp;
@@ -58,6 +59,7 @@ contract FlightSuretyData {
     */
     constructor
                                 (
+                                    address firstAirline
                                 ) 
                                 public 
     {
@@ -168,6 +170,10 @@ contract FlightSuretyData {
                             requireIsOperational
     {
          require(!airlines[airline].isRegistered,"airline is already registered");
+         //require(airlines[msg.sender].isRegistered && airlines[msg.sender].isAuthorized,"calling airline should be registered and authorized");
+         //require(airline[msg.sender].isAuthorized,"airline is already registered");
+
+
          if(authorizedAirlineCount <=4){
              airlines[airline] = Airline({
                  name: name,
@@ -177,9 +183,25 @@ contract FlightSuretyData {
                  operationalVote: true
              });
             authorizedAirlineCount = authorizedAirlineCount.add(1);
-         }
+            emit RegisteredAirline(airline);
+         } else {
+                votes = votes.add(1);
+                if(votes >= (authorizedAirlineCount.div(2))){
+                    airlines[airline] = Airline({
+                    name: name,
+                    account: airline,
+                    isRegistered: true,
+                    isAuthorized: false,
+                    operationalVote: true
+             });
+                    emit RegisteredAirline(airline);
+                    console.log(airline,"got ",votes, "votes");
 
-         emit RegisteredAirline(airline);
+                } else {
+                    console.log(airline,"needs more votes to get registered");
+                    console.log(airline,"just got ",votes, "votes");
+                }
+         }
           
     }
 
@@ -209,6 +231,28 @@ contract FlightSuretyData {
         insurancebalance += amount;
 
         emit BoughtInsurance(msg.sender, key, amount);
+    }
+
+    function isAirline
+                    (
+                        address airline
+                    )
+                    external
+                    view
+                    returns (bool)
+    {
+        return airlines[airline].isRegistered;
+    }
+
+    function isAuthorized
+                    (
+                        address airline
+                    )
+                    external
+                    view
+                    returns (bool)
+    {
+        return airlines[airline].isAuthorized;
     }
 
     /**
