@@ -195,11 +195,11 @@ contract FlightSuretyData {
                     operationalVote: true
              });
                     emit RegisteredAirline(airline);
-                    console.log(airline,"got ",votes, "votes");
+                    //console.log(airline,"got ",votes, "votes");
 
                 } else {
-                    console.log(airline,"needs more votes to get registered");
-                    console.log(airline,"just got ",votes, "votes");
+                    //console.log(airline,"needs more votes to get registered");
+                    //console.log(airline,"just got ",votes, "votes");
                 }
          }
           
